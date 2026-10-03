@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Editor Gandul JSON</title>
+<style>
+:root{--g:#14532d;--g2:#1f7a45;--au:#b58a1b;--bg:#eff3ec;--c:#fff;--ln:#cbd6c8;--t:#1c2620}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:15px/1.4 system-ui,sans-serif}
+button,input,textarea,select{font:inherit;color:inherit}
+button{background:var(--g);color:#fff;border:0;border-radius:6px;padding:7px 11px;cursor:pointer}
+button.alt{background:#fff;color:var(--g);border:1px solid var(--g)}
+button:disabled{opacity:.4}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--au);outline-offset:1px}
+header{position:sticky;top:0;z-index:5;background:var(--g);color:#fff;padding:8px 10px;border-bottom:3px solid var(--au);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+header h1{font-size:16px;margin:0 auto 0 0;font-weight:600}
+header h1 small{display:block;font-weight:400;font-size:12px;opacity:.85}
+header button{background:#fff;color:var(--g)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px}
+.bar label,.fr label{display:flex;gap:4px;align-items:center}
+select{max-width:100%;padding:6px;border:1px solid var(--ln);border-radius:6px;background:#fff}
+.panel{margin:6px 10px;background:var(--c);border:1px solid var(--ln);border-radius:8px;padding:10px}
+.panel textarea{width:100%;height:110px;font:12px monospace}
+details>summary{cursor:pointer;font-weight:600}
+.fr{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
+.fr input[type=text]{flex:1 1 140px;padding:6px;border:1px solid var(--ln);border-radius:6px}
