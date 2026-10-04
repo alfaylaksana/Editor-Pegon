@@ -1,6 +1,6 @@
 // Service worker Editor Gandul — agar editor bisa dibuka offline.
 // Naikkan angka versi jika ingin memaksa cache dibuang.
-const CACHE = 'editor-gandul-v1';
+const CACHE = 'editor-gandul-v2';
 const FILES = ['./', './editor-gandul.html'];
 
 self.addEventListener('install', e => {
@@ -25,7 +25,7 @@ self.addEventListener('fetch', e => {
   if (r.method !== 'GET' || new URL(r.url).origin !== location.origin) return;
   e.respondWith(
     caches.match(r, { ignoreSearch: true }).then(hit => {
-      const net = fetch(r).then(res => {
+      const net = fetch(r, { cache: 'no-cache' }).then(res => {
         if (res && res.ok) { const cp = res.clone(); caches.open(CACHE).then(c => c.put(r, cp)); }
         return res;
       }).catch(() => hit);
