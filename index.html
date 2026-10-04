@@ -23,7 +23,7 @@ select{max-width:100%;padding:6px;border:1px solid var(--ln);border-radius:6px;b
 details>summary{cursor:pointer;font-weight:600}
 .fr{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;align-items:center}
 .fr input[type=text]{flex:1 1 140px;padding:6px;border:1px solid var(--ln);border-radius:6px}
-main{padding:0 10px 60px}
+main{padding:0 10px 65vh}
 .bab{margin:14px 0 4px;color:var(--g);font-size:15px}
 .card{background:var(--c);border:1px solid var(--ln);border-left:5px solid var(--g2);border-radius:8px;margin:8px 0;padding:8px}
 .card.ch{border-left-color:var(--au)}
@@ -45,6 +45,13 @@ main{padding:0 10px 60px}
 .tb{display:flex;gap:4px;margin:3px 0}.tb button{padding:2px 9px}
 .vis{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13px;width:100%}
 .bar{position:sticky;top:var(--hh,56px);z-index:4;background:var(--bg);border-bottom:1px solid var(--ln)}
+#nav{position:fixed;right:8px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:14px;z-index:6;opacity:0;pointer-events:none;transition:opacity .3s}
+#nav.on{opacity:.82;pointer-events:auto}
+#nav .pil{display:flex;flex-direction:column;background:var(--g);border:2px solid var(--au);border-radius:24px;overflow:hidden}
+#nav button{width:46px;height:42px;border:0;border-radius:0;background:transparent;color:#fff;padding:0;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+#nav button+button{border-top:1px solid #ffffff55}
+#nav button:disabled{opacity:.3}
+#nav svg{width:26px;height:26px;fill:currentColor}
 #modal{position:fixed;inset:0;background:#0007;display:none;align-items:center;justify-content:center;z-index:9;padding:10px}
 #mbox{background:#fff;border-radius:10px;padding:14px;width:min(560px,100%);max-height:92vh;overflow:auto}
 #mbox input{width:100%;padding:6px;margin:3px 0;border:1px solid var(--ln);border-radius:6px}
@@ -70,6 +77,12 @@ main{padding:0 10px 60px}
 <div class="fr"><label><input type="checkbox" id="cs"> Huruf besar/kecil dibedakan</label><label><input type="checkbox" id="kw"> Kata utuh</label><button id="bFind">Cari</button><button id="bRep" class="alt">Ganti semua</button></div>
 <div id="hits"></div></details></div>
 <main id="main"></main>
+<div id="nav"><div class="pil">
+<button id="nAwal" aria-label="Ke awal halaman"><svg viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="3.5"/><polygon points="12,9.5 19.5,19.5 4.5,19.5"/></svg></button>
+<button id="nAkhir" aria-label="Ke akhir halaman"><svg viewBox="0 0 24 24"><polygon points="4.5,4.5 19.5,4.5 12,14.5"/><rect x="5" y="17" width="14" height="3.5"/></svg></button></div>
+<div class="pil">
+<button id="nPrev" aria-label="Ayat sebelumnya"><svg viewBox="0 0 24 24"><polygon points="12,6 20.5,18 3.5,18"/></svg></button>
+<button id="nNext" aria-label="Ayat berikutnya"><svg viewBox="0 0 24 24"><polygon points="3.5,6 20.5,6 12,18"/></svg></button></div></div>
 <div id="modal"><div id="mbox"></div></div><div id="toast"></div>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -189,5 +202,26 @@ try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s&&s.d){const q=JSON
 b.textContent='Pulihkan draf ('+new Date(s.t).toLocaleString('id-ID')+(q?' · hlm '+(q.p+1)+', '+q.l:'')+')';
 b.onclick=()=>{D=s.d;O=s.o||JSON.parse(JSON.stringify(s.d));fname=s.n||fname;undo=[];cur=q&&q.p<D.halamanList.length?q.p:0;start();
 const c=q&&q.p===cur&&$('#'+q.c);if(c)scrollTo(0,c.getBoundingClientRect().top+scrollY-$('header').offsetHeight-$('.bar').offsetHeight-8)}}}catch(e){}
+// ── Tombol navigasi melayang: awal/akhir halaman & ayat sebelumnya/berikutnya ──
+(function(){
+const nav=$('#nav'),bA=$('#nAwal'),bZ=$('#nAkhir'),bP=$('#nPrev'),bN=$('#nNext');
+let tm=null,held=false;
+const line=()=>$('header').offsetHeight+$('.bar').offsetHeight+6;
+const prevC=()=>{const A=line(),L=$$('.card');for(let i=L.length-1;i>=0;i--)if(L[i].getBoundingClientRect().top<A-3)return L[i];return null};
+const nextC=()=>{const A=line();return $$('.card').find(c=>c.getBoundingClientRect().top>A+3)||null};
+const lastC=()=>{const L=$$('.card');return L[L.length-1]||null};
+const go=c=>{if(c)scrollBy({top:c.getBoundingClientRect().top-line(),behavior:'instant'})};
+function upd(){const z=lastC();bP.disabled=!prevC();bN.disabled=!nextC();bA.disabled=scrollY<=2;bZ.disabled=!z||z.getBoundingClientRect().top<=line()+3}
+function hide(){if(held){tm=setTimeout(hide,1500);return}nav.classList.remove('on')}
+function show(){if(!D||!lastC())return;if(getComputedStyle($('#modal')).display!=='none')return;upd();nav.classList.add('on');clearTimeout(tm);tm=setTimeout(hide,5000)}
+['touchstart','pointerdown','mousemove'].forEach(ev=>addEventListener(ev,show,{passive:true}));
+addEventListener('scroll',show,{passive:true});
+nav.addEventListener('pointerdown',()=>{held=true});
+['pointerup','pointercancel'].forEach(ev=>addEventListener(ev,()=>{held=false}));
+bA.onclick=()=>scrollTo({top:0,behavior:'instant'});
+bZ.onclick=()=>go(lastC());
+bP.onclick=()=>go(prevC());
+bN.onclick=()=>go(nextC());
+})();
 if('serviceWorker' in navigator){addEventListener('load',()=>{navigator.serviceWorker.register('sw-editor.js').catch(()=>{})})}
 </script></body></html>
