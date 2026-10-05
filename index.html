@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Editor Gandul JSON</title>
+<title>Editor Pegon JSON</title>
 <style>
 :root{--g:#14532d;--g2:#1f7a45;--au:#b58a1b;--bg:#eff3ec;--c:#fff;--ln:#cbd6c8;--t:#1c2620}
 *{box-sizing:border-box}
@@ -63,7 +63,7 @@ main{padding:0 10px 65vh}
 #toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--g);color:#fff;padding:8px 14px;border-radius:8px;display:none;z-index:10}
 </style></head>
 <body>
-<header><h1>Editor Gandul JSON<small id="info">Belum ada file dimuat</small></h1>
+<header><h1>Editor Pegon JSON<small id="info">Belum ada file dimuat</small></h1>
 <button id="bLoad">Muat</button><button id="bUndo" disabled>Urungkan</button><button id="bDl" disabled>Unduh</button><button id="bCp" disabled>Salin</button></header>
 <div id="pLoad" class="panel">
 <div class="fr"><input type="file" id="file"><button id="bRestore" class="alt" style="display:none"></button></div>
@@ -95,7 +95,15 @@ try{Object.assign(V,JSON.parse(localStorage.getItem(VK)||'{}'))}catch(e){}
 function buildVis(){const v=$('#vis');v.textContent='';COLS.forEach(([c,l])=>{const i=el('input',{type:'checkbox'});i.checked=!!V[c];i.onchange=()=>{V[c]=i.checked?1:0;try{localStorage.setItem(VK,JSON.stringify(V))}catch(e){}rerender()};v.append(el('label',{},i,' '+l))})}
 function el(t,a,...k){const e=document.createElement(t);for(const x in a||{}){if(x==='class')e.className=a[x];else if(x.slice(0,2)==='on')e[x]=a[x];else e.setAttribute(x,a[x])}e.append(...k.flat());return e}
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(tm);tm=setTimeout(()=>t.style.display='none',2200)}
-function groups(b){const L=b.kataList,g=[];let s=0;L.forEach((k,i)=>{if(k.nomor||i===L.length-1){g.push([s,i]);s=i+1}});return g}
+const BSM='بسم الله الرحمن الرحيم';
+function nrm(s){return(s||'').replace(/[\u064B-\u065F\u0610-\u061A\u0670\u06D6-\u06ED]/g,'').replace(/[ٱإأآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/\s+/g,' ').trim()}
+function no1(v){return String(v||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).trim()==='1'}
+function isBsm(L,g){return nrm(L.slice(g[0],g[1]+1).map(k=>k.arab).join(' '))===BSM}
+function groups(b){const L=b.kataList,g=[];let s=0;L.forEach((k,i)=>{if(k.nomor||i===L.length-1){g.push([s,i]);s=i+1}});
+// Basmalah di awal surah (selain Al-Fatihah) bukan bagian ayat 1: dipisah jadi kartu sendiri
+if(String(b.nomorSurah||'').trim()==='1')return g;
+const o=[];g.forEach(x=>{let cut=0;if(no1(L[x[1]].nomor))for(let n=2;n<=Math.min(x[1]-x[0],4);n++){if(nrm(L.slice(x[0],x[0]+n).map(k=>k.arab).join(' '))===BSM){cut=n;break}}
+if(cut){o.push([x[0],x[0]+cut-1],[x[0]+cut,x[1]])}else o.push(x)});return o}
 function findT(p,b,n){const T=p.terjemahan;if(!T||!n)return null;let k=(b.nomorSurah||'')+':'+n;if(T[k])return T[k];for(k in T)if(k.split(':')[1]===n)return T[k];return null}
 function sig(p,b,gi){const g=p&&b&&b.kataList&&groups(b)[gi];if(!g)return'';return JSON.stringify([b.kataList.slice(g[0],g[1]+1),findT(p,b,b.kataList[g[1]].nomor)])}
 function label(p,i){const n=[];(p.babList||[]).forEach(b=>(b.kataList||[]).forEach(k=>{if(k.nomor)n.push(k.nomor)}));const nm=(p.babList||[]).map(b=>b.namaBab).filter(Boolean).join('، ');return 'Hlm '+(i+1)+(nm?' · '+nm:'')+(n.length?' · ayat '+n[0]+'–'+n[n.length-1]:'')}
@@ -111,7 +119,7 @@ if(only&&!shown)m.append(el('p',{},'Belum ada ayat yang diubah di halaman ini.')
 m.append(el('div',{class:'fr'},el('button',{class:'alt',onclick:()=>go(-1)},'‹ Halaman sebelumnya'),el('button',{class:'alt',onclick:()=>go(1)},'Halaman berikutnya ›')))}
 function card(p,b,bi,gi,g,ch){const L=b.kataList,n=L[g[1]].nomor,t=findT(p,b,n);
 const c=el('div',{class:'card'+(ch?' ch':''),id:'c-'+cur+'-'+bi+'-'+gi});
-c.append(el('div',{class:'hd'},el('b',{},'Ayat '+(n||'(tanpa nomor)')),ch?el('span',{class:'tag'},'diubah'):''));
+c.append(el('div',{class:'hd'},el('b',{},!n&&isBsm(L,g)?'Basmalah':'Ayat '+(n||'(tanpa nomor)')),ch?el('span',{class:'tag'},'diubah'):''));
 if(t&&V.tp){const d=el('details',{class:'trj'},el('summary',{},'Terjemah popup'));for(const [f,lab] of [['indo','Indo'],['en','Inggris']]){const a=el('textarea',{spellcheck:'false','aria-label':lab});a.value=t[f]||'';a.oninput=()=>{t[f]=a.value;dirty()};d.append(el('div',{},lab+':'),a)}c.append(d)}
 for(let i=g[0];i<=g[1];i++)c.append(row(b,i,L[i],i<g[1]));
 return c}
