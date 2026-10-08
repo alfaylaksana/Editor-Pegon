@@ -64,7 +64,7 @@ main{padding:0 10px 65vh}
 </style></head>
 <body>
 <header><h1>Editor Pegon JSON<small id="info">Belum ada file dimuat</small></h1>
-<button id="bLoad">Muat</button><button id="bUndo" disabled>Urungkan</button><button id="bDl" disabled>Unduh</button><button id="bCp" disabled>Salin</button></header>
+<button id="bLoad">Muat</button><button id="bUndo" disabled>Urungkan</button><button id="bDl" disabled>Unduh</button><button id="bCp" disabled>Salin</button><button id="bCloud" aria-label="Cadangan online">☁ Cadangan</button></header>
 <div id="pLoad" class="panel">
 <div class="fr"><input type="file" id="file"><button id="bRestore" class="alt" style="display:none"></button></div>
 <textarea id="paste" placeholder="Atau tempel isi JSON di sini"></textarea>
@@ -231,6 +231,119 @@ bA.onclick=()=>scrollTo({top:0,behavior:'instant'});
 bZ.onclick=()=>go(lastC());
 bP.onclick=()=>go(prevC());
 bN.onclick=()=>go(nextC());
+})();
+// ── Cadangan online (Firestore) ─────────────────────────────────────
+// Koleksi terpisah "editor_draf": TIDAK menyentuh data app (juz30, juz30_halaman).
+// Disimpan per halaman (batas 1 MB per dokumen Firestore); yang dikirim hanya
+// halaman yang berubah. Kode Firebase baru dimuat saat tombol ☁ ditekan, jadi
+// editor tetap cepat dibuka dan tetap jalan offline.
+(function(){
+const CFG={ apiKey: "AIzaSyAJVB25E2Oq6bEq5AkkTydGsLZ23dURj_Y", authDomain: "bidayatuna-836e4.firebaseapp.com", projectId: "bidayatuna-836e4", storageBucket: "bidayatuna-836e4.firebasestorage.app", messagingSenderId: "666248558558", appId: "1:666248558558:web:d55a1a4583faf26c190f4f" };
+const KOL='editor_draf',LSC='gandulEditorCloudLast',BASE='https://www.gstatic.com/firebasejs/11.2.0/';
+let db=null,auth=null,sibuk=false;
+const tmo=(p,ms)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),ms))]);
+const loadScript=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>no(new Error('Gagal memuat kode Firebase (offline?)'));document.head.append(s)});
+async function ensureFb(){
+if(db)return;
+if(!(window.firebase&&firebase.firestore&&firebase.auth)){await loadScript(BASE+'firebase-app-compat.js');await Promise.all([loadScript(BASE+'firebase-firestore-compat.js'),loadScript(BASE+'firebase-auth-compat.js')])}
+if(!firebase.apps.length)firebase.initializeApp(CFG);
+db=firebase.firestore();auth=firebase.auth()}
+const authReady=()=>new Promise(r=>{const un=auth.onAuthStateChanged(u=>{un();r(u)})});
+function hs(s){let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}
+h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+return(4294967296*(2097151&h2)+(h1>>>0)).toString(36)}
+// nama dokumen dari nama file; akhiran "-edit" (hasil Unduh) dibuang supaya cocok dengan file induknya
+const keyOf=n=>(String(n||'').replace(/\.json$/i,'').replace(/(-edit)+$/i,'').replace(/[^A-Za-z0-9._-]/g,'_').replace(/^\.+/,'_').slice(0,100))||'tanpa_nama';
+const byteLen=s=>new TextEncoder().encode(s).length;
+function pesanErr(e){const c=(e&&e.code)||'',m=(e&&e.message)||String(e);
+if(c==='permission-denied')return'Ditolak server: aturan Firestore belum mengizinkan koleksi editor_draf (atur di Firebase console, tab Rules).';
+if(/^auth\/(invalid|wrong|user-not)/.test(c))return'Email atau kata sandi salah.';
+if(c==='auth/too-many-requests')return'Terlalu banyak percobaan masuk. Tunggu sebentar.';
+if(c==='auth/network-request-failed'||c==='unavailable'||m==='timeout')return'Koneksi bermasalah atau lambat. Coba lagi saat sinyal baik.';
+return m}
+const tgl=ms=>ms?new Date(ms).toLocaleString('id-ID'):'-';
+
+async function cadangkan(prog){
+if(!D)throw new Error('Belum ada file dimuat di editor.');
+const u=auth.currentUser;if(!u)throw new Error('Belum masuk.');
+const L=D.halamanList,strs=L.map(h=>JSON.stringify(h)),fps=strs.map(hs);
+const big=strs.findIndex(s=>byteLen(s)>900000);
+if(big>=0)throw new Error('Halaman '+(big+1)+' terlalu besar (lebih dari 900 KB) untuk satu dokumen Firestore.');
+const key=keyOf(fname),meta=db.collection(KOL).doc(key),pg=meta.collection('halaman');
+const old=await tmo(meta.get(),20000),od=old.exists?old.data():{},ofps=od.fps||[],on=od.n||0;
+const ub=[];strs.forEach((s,i)=>{if(ofps[i]!==fps[i])ub.push(i)});
+let b=db.batch(),n=0,sz=0,sent=0;
+const flush=async()=>{if(n){await tmo(b.commit(),45000);b=db.batch();n=0;sz=0}};
+for(const i of ub){const len=byteLen(strs[i]);if(n>=20||sz+len>3e6)await flush();
+b.set(pg.doc(String(i)),{i,data:strs[i],fp:fps[i]});n++;sz+=len;sent++;if(prog)prog(sent,ub.length)}
+for(let i=L.length;i<on;i++){if(n>=400)await flush();b.delete(pg.doc(String(i)));n++}
+await flush();
+const hdr=Object.assign({},D);delete hdr.halamanList;
+await tmo(meta.set({nama:String(fname).replace(/(-edit)+(?=\.json$)/i,''),n:L.length,fps,header:JSON.stringify(hdr),waktu:firebase.firestore.FieldValue.serverTimestamp(),ukuran:strs.reduce((a,s)=>a+s.length,0),oleh:u.email||u.uid,v:1}),30000);
+try{localStorage.setItem(LSC,JSON.stringify({k:key,t:Date.now(),n:L.length}))}catch(e){}
+return{sent,total:L.length}}
+
+async function daftar(){const s=await tmo(db.collection(KOL).get(),20000),a=[];
+s.forEach(d=>{const x=d.data();a.push({key:d.id,nama:x.nama||d.id,n:x.n||0,oleh:x.oleh||'',t:(x.waktu&&x.waktu.toMillis)?x.waktu.toMillis():0})});
+return a.sort((x,y)=>y.t-x.t)}
+
+async function ambil(key){
+const meta=await tmo(db.collection(KOL).doc(key).get(),20000);if(!meta.exists)throw new Error('Cadangan tidak ditemukan.');
+const m=meta.data(),ss=await tmo(db.collection(KOL).doc(key).collection('halaman').get(),45000),arr=new Array(m.n);
+ss.forEach(d=>{const x=d.data();if(x.i<m.n)arr[x.i]=x.data});
+for(let i=0;i<m.n;i++)if(typeof arr[i]!=='string')throw new Error('Cadangan tidak lengkap (halaman '+(i+1)+' hilang). Cadangkan ulang dari perangkat asalnya.');
+const d=Object.assign(JSON.parse(m.header||'{}'),{halamanList:arr.map(s=>JSON.parse(s))});
+return{d,nama:m.nama||key}}
+
+// ── tampilan (memakai #modal yang sudah ada) ──
+const tampil=(...k)=>{const b=$('#mbox');b.textContent='';b.append(...k);$('#modal').style.display='flex'};
+const judul=()=>el('b',{style:'font-size:17px;color:var(--g)'},'☁ Cadangan online');
+const tTutup=()=>el('button',{class:'alt',onclick:tutup},'Tutup');
+const galat=t=>el('p',{style:'color:#a00;margin:8px 0'},t);
+async function buka(){
+tampil(judul(),el('p',{},'Memuat…'));
+try{if(!navigator.onLine)throw new Error('Sedang offline. Cadangan online butuh internet.');
+await tmo(ensureFb(),25000);const u=await tmo(authReady(),10000);u?layarMasuk(u):layarLogin()}
+catch(e){tampil(judul(),galat(pesanErr(e)),tTutup())}}
+
+function layarLogin(msg){
+const em=el('input',{type:'email',placeholder:'Email akun app',autocomplete:'username'}),pw=el('input',{type:'password',placeholder:'Kata sandi',autocomplete:'current-password'}),er=el('div',{});
+if(msg)er.append(galat(msg));
+const go=el('button',{},'Masuk');
+go.onclick=async()=>{if(sibuk)return;sibuk=true;go.disabled=true;er.textContent='';
+try{const c=await tmo(auth.signInWithEmailAndPassword(em.value.trim(),pw.value),20000);sibuk=false;layarMasuk(c.user)}
+catch(e){sibuk=false;go.disabled=false;er.append(galat(pesanErr(e)))}};
+tampil(judul(),el('p',{style:'font-size:13px;color:#556'},'Masuk dengan akun yang sama seperti di app utama.'),em,pw,er,el('div',{class:'fr'},go,tTutup()))}
+
+function layarMasuk(u){
+const st=el('div',{style:'margin:8px 0;font-size:14px'});
+let last='';try{const l=JSON.parse(localStorage.getItem(LSC)||'null');if(l)last='Cadangan terakhir dari editor ini: '+tgl(l.t)+' ('+l.k+', '+l.n+' hlm)'}catch(e){}
+const info=el('p',{style:'font-size:13px;color:#556;margin:6px 0'},D?('File di editor: '+fname+' · '+D.halamanList.length+' halaman → disimpan sebagai "'+keyOf(fname)+'"'):'Belum ada file dimuat di editor.');
+const bC=el('button',{},'Cadangkan sekarang'),bL=el('button',{class:'alt'},'Lihat cadangan…'),bK=el('button',{class:'alt',style:'padding:4px 8px;font-size:12px'},'Keluar');
+if(!D)bC.disabled=true;
+const kunci=x=>{bC.disabled=bL.disabled=bK.disabled=x};
+bC.onclick=async()=>{if(sibuk)return;sibuk=true;kunci(true);st.style.color='';st.textContent='Mengirim…';
+try{const r=await cadangkan((a,b)=>{st.textContent='Mengirim… '+a+'/'+b+' halaman'});sibuk=false;
+st.style.color='var(--g)';st.textContent='✓ Tersimpan pukul '+new Date().toLocaleTimeString('id-ID')+' · '+r.sent+' dari '+r.total+' halaman diperbarui'+(r.sent?'':' (tidak ada perubahan)');toast('Cadangan online tersimpan');kunci(false)}
+catch(e){sibuk=false;kunci(false);st.style.color='#a00';st.textContent=pesanErr(e)}};
+bL.onclick=async()=>{if(sibuk)return;sibuk=true;kunci(true);st.style.color='';st.textContent='Memuat daftar…';
+try{const a=await daftar();sibuk=false;layarDaftar(a,u)}catch(e){sibuk=false;kunci(false);st.style.color='#a00';st.textContent=pesanErr(e)}};
+bK.onclick=async()=>{try{await auth.signOut()}catch(e){}layarLogin()};
+tampil(judul(),el('div',{style:'display:flex;gap:8px;align-items:center;margin:6px 0'},el('span',{style:'font-size:13px'},'Masuk sebagai '+(u.email||u.uid)),bK),info,last?el('p',{style:'font-size:12px;color:#556;margin:4px 0'},last):'',el('div',{class:'fr'},bC,bL,tTutup()),st)}
+
+function layarDaftar(a,u){
+const st=el('div',{style:'margin:8px 0;font-size:14px'});
+const L=a.length?a.map(x=>el('button',{class:'hit',onclick:()=>pulihkan(x,u,st)},x.nama+' · '+x.n+' hlm · '+tgl(x.t)+(x.oleh?' · '+x.oleh:''))):[el('p',{},'Belum ada cadangan online.')];
+tampil(judul(),el('p',{style:'font-size:13px;color:#556'},'Ketuk salah satu untuk memuatnya ke editor.'),...L,st,el('div',{class:'fr'},el('button',{class:'alt',onclick:()=>layarMasuk(u)},'‹ Kembali'),tTutup()))}
+
+async function pulihkan(x,u,st){
+if(sibuk)return;
+if(D&&!confirm('Muat cadangan "'+x.nama+'" ('+x.n+' halaman, '+tgl(x.t)+') ke editor?\n\nIsi editor saat ini akan DIGANTI.'+(dirtyF?'\nAda perubahan di editor yang belum diunduh.':'')))return;
+sibuk=true;st.style.color='';st.textContent='Mengunduh cadangan…';
+try{const r=await ambil(x.key);sibuk=false;load(JSON.stringify(r.d),r.nama);dirtyF=false;save();tutup();toast('Cadangan dimuat: '+r.nama)}
+catch(e){sibuk=false;st.style.color='#a00';st.textContent=pesanErr(e)}}
+
+$('#bCloud').onclick=buka;
 })();
 if('serviceWorker' in navigator){addEventListener('load',()=>{navigator.serviceWorker.register('sw-editor.js').catch(()=>{})})}
 </script></body></html>
